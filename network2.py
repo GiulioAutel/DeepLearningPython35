@@ -1,22 +1,18 @@
-"""network2.py
-~~~~~~~~~~~~~~
-
+"""
 An improved version of network.py, implementing the stochastic
 gradient descent learning algorithm for a feedforward neural network.
 Improvements include the addition of the cross-entropy cost function,
 regularization, and better initialization of network weights.  Note
 that I have focused on making the code simple, easily readable, and
 easily modifiable.  It is not optimized, and omits many desirable
-features.
-
-"""
+features."""
 
 #### Libraries
 # Standard library
 import json
 import random
 import sys
-
+import matplotlib.pyplot as plt
 # Third-party libraries
 import numpy as np
 
@@ -100,25 +96,6 @@ class Network(object):
         self.weights = [np.random.randn(y, x)/np.sqrt(x)
                         for x, y in zip(self.sizes[:-1], self.sizes[1:])]
 
-    def large_weight_initializer(self):
-        """Initialize the weights using a Gaussian distribution with mean 0
-        and standard deviation 1.  Initialize the biases using a
-        Gaussian distribution with mean 0 and standard deviation 1.
-
-        Note that the first layer is assumed to be an input layer, and
-        by convention we won't set any biases for those neurons, since
-        biases are only ever used in computing the outputs from later
-        layers.
-
-        This weight and bias initializer uses the same approach as in
-        Chapter 1, and is included for purposes of comparison.  It
-        will usually be better to use the default weight initializer
-        instead.
-
-        """
-        self.biases = [np.random.randn(y, 1) for y in self.sizes[1:]]
-        self.weights = [np.random.randn(y, x)
-                        for x, y in zip(self.sizes[:-1], self.sizes[1:])]
 
     def feedforward(self, a):
         """Return the output of the network if ``a`` is input."""
@@ -126,14 +103,13 @@ class Network(object):
             a = sigmoid(np.dot(w, a)+b)
         return a
 
-    def SGD(self, training_data, epochs, mini_batch_size, eta,
-            lmbda = 0.0,
+    def SGD(self, training_data, epochs, mini_batch_size, eta, n_early_stopping, lmbda = 0.0, 
             evaluation_data=None,
             monitor_evaluation_cost=False,
             monitor_evaluation_accuracy=False,
             monitor_training_cost=False,
             monitor_training_accuracy=False,
-            early_stopping_n = 0):
+            early_stopping = False):
         """Train the neural network using mini-batch stochastic gradient
         descent.  The ``training_data`` is a list of tuples ``(x, y)``
         representing the training inputs and the desired outputs.  The
@@ -153,10 +129,7 @@ class Network(object):
         are empty if the corresponding flag is not set.
 
         """
-
-        # early stopping functionality:
-        best_accuracy=1
-
+        
         training_data = list(training_data)
         n = len(training_data)
 
@@ -164,12 +137,10 @@ class Network(object):
             evaluation_data = list(evaluation_data)
             n_data = len(evaluation_data)
 
-        # early stopping functionality:
-        best_accuracy=0
-        no_accuracy_change=0
-
         evaluation_cost, evaluation_accuracy = [], []
         training_cost, training_accuracy = [], []
+        max_accuracy = 0
+        
         for j in range(epochs):
             random.shuffle(training_data)
             mini_batches = [
@@ -179,40 +150,47 @@ class Network(object):
                 self.update_mini_batch(
                     mini_batch, eta, lmbda, len(training_data))
 
-            print("Epoch %s training complete" % j)
+            print(f"Epoch {j} training complete")
 
+
+
+            #### MONITORING ####
             if monitor_training_cost:
                 cost = self.total_cost(training_data, lmbda)
                 training_cost.append(cost)
-                print("Cost on training data: {}".format(cost))
+                print(f"Cost on training data: {cost}")
             if monitor_training_accuracy:
                 accuracy = self.accuracy(training_data, convert=True)
                 training_accuracy.append(accuracy)
-                print("Accuracy on training data: {} / {}".format(accuracy, n))
+                print(f"Accuracy on training data: {accuracy} / {n}")
             if monitor_evaluation_cost:
                 cost = self.total_cost(evaluation_data, lmbda, convert=True)
                 evaluation_cost.append(cost)
-                print("Cost on evaluation data: {}".format(cost))
-            if monitor_evaluation_accuracy:
+                print(f"Cost on evaluation data: {cost}")
+            if monitor_evaluation_accuracy: # Questo parametro viene utilizzato per early stopping
                 accuracy = self.accuracy(evaluation_data)
                 evaluation_accuracy.append(accuracy)
-                print("Accuracy on evaluation data: {} / {}".format(self.accuracy(evaluation_data), n_data))
+                print(f"Accuracy on evaluation data: {self.accuracy(evaluation_data)} / {n_data}")
+                
+            
+            max_accuracy = max(evaluation_accuracy)
+            if early_stopping:
+                print(f'Early stopping is active with no-improvment-in-{n_early_stopping} rule')
+            print(f'Maximum accuracy in last {n_early_stopping} entries: {max(evaluation_accuracy[-n_early_stopping:])/n_data*100}%')
+            print(f'Maximum accuracy level reached is {max_accuracy/n_data*100}% \n')
+                        
+            ### Early Stopping ####
+            if early_stopping and max(evaluation_accuracy[-n_early_stopping:]) < max_accuracy:
+                break
+        
+        ### PLOT RESULTS ####
+        plt.plot(evaluation_accuracy)
+        plt.xlabel('Epochs')
+        plt.ylabel('Accuracy')    
+        plt.show()
 
-            # Early stopping:
-            if early_stopping_n > 0:
-                if accuracy > best_accuracy:
-                    best_accuracy = accuracy
-                    no_accuracy_change = 0
-                    #print("Early-stopping: Best so far {}".format(best_accuracy))
-                else:
-                    no_accuracy_change += 1
+        return evaluation_cost, evaluation_accuracy, training_cost, training_accuracy
 
-                if (no_accuracy_change == early_stopping_n):
-                    #print("Early-stopping: No accuracy change in last epochs: {}".format(early_stopping_n))
-                    return evaluation_cost, evaluation_accuracy, training_cost, training_accuracy
-
-        return evaluation_cost, evaluation_accuracy, \
-            training_cost, training_accuracy
 
     def update_mini_batch(self, mini_batch, eta, lmbda, n):
         """Update the network's weights and biases by applying gradient
