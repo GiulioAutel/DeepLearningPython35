@@ -208,19 +208,24 @@ class ConvPoolLayer(object):
         self.image_shape = image_shape
         self.poolsize = poolsize
         self.activation_fn=activation_fn
+        
         # initialize weights and biases
         n_out = (filter_shape[0]*np.prod(filter_shape[2:])/np.prod(poolsize))
+        
         self.w = theano.shared(
             np.asarray(
                 np.random.normal(loc=0, scale=np.sqrt(1.0/n_out), size=filter_shape),
                 dtype=theano.config.floatX),
             borrow=True)
+        
         self.b = theano.shared(
             np.asarray(
                 np.random.normal(loc=0, scale=1.0, size=(filter_shape[0],)),
                 dtype=theano.config.floatX),
             borrow=True)
+        
         self.params = [self.w, self.b]
+
 
     def set_inpt(self, inpt, inpt_dropout, mini_batch_size):
         self.inpt = inpt.reshape(self.image_shape)
